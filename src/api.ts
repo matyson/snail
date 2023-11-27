@@ -1,5 +1,5 @@
 import { Elysia, t } from "elysia";
-import { db } from "./db/db";
+import { db } from "./db";
 import { cache } from "./cache";
 
 const jobSchema = t.Object(
@@ -17,25 +17,27 @@ const api = new Elysia()
   .group("/api", (app) =>
     app
       .get("/", () => "Using api")
-      .get("/jobs", () => "Jobs")
+      .get("/jobs", ({ db }) => db.query.jobs.findMany(), {
+        detail: {
+          description: "Get all jobs",
+          summary: "Get all jobs",
+        },
+      })
       .get(
         "/job/:id",
-        ({ params, db, cache }) => {
+        async ({ params, db, cache }) => {
           if (cache.has(params.id)) {
             console.log("cache hit");
             return cache.get(params.id);
           }
           console.log("cache miss");
-          cache.set(params.id, {
-            id: params.id,
-            db: db,
-            status: "running",
+          const query = await db.query.jobs.findMany({
+            where: (jobs, { eq }) => eq(jobs.id, params.id),
+            limit: 1,
           });
-          return {
-            id: params.id,
-            db: db,
-            status: "running",
-          };
+          const job = query[0];
+          cache.set(params.id, job);
+          return job;
         },
         {
           detail: {
